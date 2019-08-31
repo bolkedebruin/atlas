@@ -194,10 +194,7 @@ public class GremlinQueryComposer {
         rhs = addQuotesIfNecessary(lhsI, rhs);
         SearchParameters.Operator op = SearchParameters.Operator.fromString(operator);
         if (op == SearchParameters.Operator.LIKE) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("ACTIVE ENT TYPE: " + context.getActiveEntityType().getTypeName() + " LHS : " + lhsI.getQualifiedName() + " ATTR: " + lhsI.getAttributeName() + " TYPE: " + lhsI.getTypeName());
-            }
-            final AtlasStructType.AtlasAttribute attribute = context.getActiveEntityType().getAttribute(lhsI.getQualifiedName());
+            final AtlasStructType.AtlasAttribute attribute = context.getActiveEntityType().getAttribute(lhsI.getAttributeName());
             final AtlasStructDef.AtlasAttributeDef.IndexType indexType = attribute.getAttributeDef().getIndexType();
 
             if (indexType == AtlasStructDef.AtlasAttributeDef.IndexType.STRING) {
