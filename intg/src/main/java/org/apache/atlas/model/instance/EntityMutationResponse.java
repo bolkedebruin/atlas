@@ -115,14 +115,6 @@ public class EntityMutationResponse {
     }
 
     @JsonIgnore
-    public List<AtlasEntityHeader> getPurgedEntities() {
-        if ( mutatedEntities != null) {
-            return mutatedEntities.get(EntityOperation.PURGE);
-        }
-        return null;
-    }
-
-    @JsonIgnore
     public AtlasEntityHeader getFirstEntityCreated() {
         final List<AtlasEntityHeader> entitiesByOperation = getEntitiesByOperation(EntityOperation.CREATE);
         if ( entitiesByOperation != null && entitiesByOperation.size() > 0) {

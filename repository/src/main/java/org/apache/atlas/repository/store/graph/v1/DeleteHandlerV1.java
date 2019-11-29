@@ -106,16 +106,9 @@ public abstract class DeleteHandlerV1 {
             String              guid = AtlasGraphUtilsV2.getIdFromVertex(instanceVertex);
             AtlasEntity.Status state = getState(instanceVertex);
 
-            boolean needToSkip = requestContext.isPurgeRequested() ? (state == ACTIVE || requestContext.isPurgedEntity(guid)) :
-                    (state == DELETED || requestContext.isDeletedEntity(guid));
-
-            if (needToSkip) {
+            if (state == DELETED || requestContext.isDeletedEntity(guid)) {
                 if (LOG.isDebugEnabled()) {
-                    if(RequestContext.get().isPurgeRequested()) {
-                        LOG.debug("Skipping purging of {} as it is active or already purged", guid);
-                    } else {
-                        LOG.debug("Skipping deletion of {} as it is already deleted", guid);
-                    }
+                    LOG.debug("Skipping deletion of {} as it is already deleted", guid);
                 }
 
                 continue;
@@ -156,15 +149,10 @@ public abstract class DeleteHandlerV1 {
     public void deleteRelationships(Collection<AtlasEdge> edges, final boolean forceDelete) throws AtlasBaseException {
         for (AtlasEdge edge : edges) {
             boolean isInternal = isInternalType(edge.getInVertex()) && isInternalType(edge.getOutVertex());
-            boolean needToSkip = !isInternal && (RequestContext.get().isPurgeRequested() ? getState(edge) == ACTIVE : getState(edge) == DELETED);
 
-            if (needToSkip) {
+            if (!isInternal && getState(edge) == DELETED) {
                 if (LOG.isDebugEnabled()) {
-                    if(RequestContext.get().isPurgeRequested()) {
-                        LOG.debug("Skipping purging of {} as it is active or already purged", getIdFromEdge(edge));
-                    } else{
-                        LOG.debug("Skipping deletion of {} as it is already deleted", getIdFromEdge(edge));
-                    }
+                    LOG.debug("Skipping deletion of {} as it is already deleted", getIdFromEdge(edge));
                 }
 
                 continue;
@@ -195,10 +183,8 @@ public abstract class DeleteHandlerV1 {
             AtlasVertex        vertex = vertices.pop();
             AtlasEntity.Status state  = getState(vertex);
 
-            //In case of purge If the reference vertex is active then skip it or else
-            //If the vertex marked for deletion, skip it
-            boolean needToSkip = RequestContext.get().isPurgeRequested() ? (state == ACTIVE) : (state == DELETED);
-            if (needToSkip) {
+            if (state == DELETED) {
+                //If the reference vertex is marked for deletion, skip it
                 continue;
             }
 
@@ -235,9 +221,7 @@ public abstract class DeleteHandlerV1 {
                     } else {
                         AtlasEdge edge = graphHelper.getEdgeForLabel(vertex, edgeLabel);
 
-                        needToSkip = (edge == null || RequestContext.get().isPurgeRequested() ?
-                                getState(edge) == ACTIVE : getState(edge) == DELETED);
-                        if (needToSkip) {
+                        if (edge == null || getState(edge) == DELETED) {
                             continue;
                         }
 
@@ -290,9 +274,7 @@ public abstract class DeleteHandlerV1 {
 
                         if (CollectionUtils.isNotEmpty(edges)) {
                             for (AtlasEdge edge : edges) {
-                                needToSkip = (edge == null || RequestContext.get().isPurgeRequested() ?
-                                        getState(edge) == ACTIVE : getState(edge) == DELETED);
-                                if (needToSkip) {
+                                if (edge == null || getState(edge) == DELETED) {
                                     continue;
                                 }
 
@@ -856,10 +838,8 @@ public abstract class DeleteHandlerV1 {
         final String outId    = GraphHelper.getGuid(outVertex);
         final Status state    = getState(outVertex);
 
-        boolean needToSkip = RequestContext.get().isPurgeRequested() ? state == ACTIVE || (outId != null && RequestContext.get().isPurgedEntity(outId)) :
-                state == DELETED || (outId != null && RequestContext.get().isDeletedEntity(outId));
-
-        if (needToSkip) {
+        if (state == DELETED || (outId != null && RequestContext.get().isDeletedEntity(outId))) {
+            //If the reference vertex is marked for deletion, skip updating the reference
             return;
         }
 
@@ -974,8 +954,7 @@ public abstract class DeleteHandlerV1 {
         for (AtlasEdge edge : incomingEdges) {
             Status edgeState = getState(edge);
 
-            boolean isProceed = RequestContext.get().isPurgeRequested()? edgeState == DELETED : edgeState == ACTIVE;
-            if (isProceed) {
+            if (edgeState == ACTIVE) {
                 if (isRelationshipEdge(edge)) {
                     deleteRelationship(edge);
                 } else {

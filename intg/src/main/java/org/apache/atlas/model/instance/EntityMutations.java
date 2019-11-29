@@ -48,8 +48,7 @@ public class EntityMutations implements Serializable {
         CREATE,
         UPDATE,
         PARTIAL_UPDATE,
-        DELETE,
-        PURGE
+        DELETE
     }
 
     public static final class EntityMutation implements Serializable {

@@ -102,7 +102,6 @@ public class AtlasEntityChangeNotifier {
         List<AtlasEntityHeader> updatedEntities          = entityMutationResponse.getUpdatedEntities();
         List<AtlasEntityHeader> partiallyUpdatedEntities = entityMutationResponse.getPartialUpdatedEntities();
         List<AtlasEntityHeader> deletedEntities          = entityMutationResponse.getDeletedEntities();
-        List<AtlasEntityHeader> purgedEntities           = entityMutationResponse.getPurgedEntities();
 
         // complete full text mapping before calling toReferenceables(), from notifyListners(), to
         // include all vertex updates in the current graph-transaction
@@ -114,7 +113,6 @@ public class AtlasEntityChangeNotifier {
         notifyListeners(updatedEntities, EntityOperation.UPDATE, isImport);
         notifyListeners(partiallyUpdatedEntities, EntityOperation.PARTIAL_UPDATE, isImport);
         notifyListeners(deletedEntities, EntityOperation.DELETE, isImport);
-        notifyListeners(purgedEntities, EntityOperation.PURGE, isImport);
 
         notifyPropagatedEntities();
     }
@@ -342,7 +340,7 @@ public class AtlasEntityChangeNotifier {
 
 
     private void notifyV1Listeners(List<AtlasEntityHeader> entityHeaders, EntityOperation operation, boolean isImport) throws AtlasBaseException {
-        if (operation != EntityOperation.PURGE && instanceConverter != null) {
+        if (instanceConverter != null) {
             List<Referenceable> typedRefInsts = toReferenceables(entityHeaders, operation);
 
             for (EntityChangeListener listener : entityChangeListeners) {
@@ -383,10 +381,6 @@ public class AtlasEntityChangeNotifier {
                 case DELETE:
                     listener.onEntitiesDeleted(entities, isImport);
                     break;
-
-                case PURGE:
-                    listener.onEntitiesPurged(entities);
-                    break;
             }
         }
     }
@@ -404,9 +398,6 @@ public class AtlasEntityChangeNotifier {
                     break;
                 case DELETE:
                     listener.onRelationshipsDeleted(relationships, isImport);
-                    break;
-                case PURGE:
-                    listener.onRelationshipsPurged(relationships);
                     break;
             }
         }
@@ -494,7 +485,7 @@ public class AtlasEntityChangeNotifier {
                 final AtlasEntity entity;
 
                 // delete notifications don't need all attributes. Hence the special handling for delete operation
-                if (operation == EntityOperation.DELETE || operation == EntityOperation.PURGE) {
+                if (operation == EntityOperation.DELETE) {
                     entity = new AtlasEntity(entityHeader);
                 } else {
                     String entityGuid = entityHeader.getGuid();
@@ -595,22 +586,11 @@ public class AtlasEntityChangeNotifier {
         List<AtlasEntityHeader> updatedEntities        = resp.getUpdatedEntities();
         List<AtlasEntityHeader> partialUpdatedEntities = resp.getPartialUpdatedEntities();
         List<AtlasEntityHeader> deletedEntities        = resp.getDeletedEntities();
-        List<AtlasEntityHeader> purgedEntities        = resp.getPurgedEntities();
 
         // remove entities with DELETED status from created & updated lists
         purgeDeletedEntities(createdEntities);
         purgeDeletedEntities(updatedEntities);
         purgeDeletedEntities(partialUpdatedEntities);
-
-        // remove entities purged in this mutation from created & updated lists
-        if (purgedEntities != null) {
-            for (AtlasEntityHeader entity : purgedEntities) {
-                purgeEntity(entity.getGuid(), deletedEntities);
-                purgeEntity(entity.getGuid(), createdEntities);
-                purgeEntity(entity.getGuid(), updatedEntities);
-                purgeEntity(entity.getGuid(), partialUpdatedEntities);
-            }
-        }
 
         // remove entities deleted in this mutation from created & updated lists
         if (deletedEntities != null) {
