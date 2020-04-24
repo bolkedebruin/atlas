@@ -370,6 +370,9 @@ public class AtlasEntityType extends AtlasStructType {
 
     @Override
     public AtlasAttribute getSystemAttribute(String attributeName) {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("==> getSystemAttribute Trying to find {} returning {}", attributeName, AtlasEntityType.ENTITY_ROOT.allAttributes.get(attributeName));
+        }
         return AtlasEntityType.ENTITY_ROOT.allAttributes.get(attributeName);
     }
 
@@ -1283,6 +1286,7 @@ public class AtlasEntityType extends AtlasStructType {
                 add(new AtlasAttributeDef(STATE_PROPERTY_KEY, ATLAS_TYPE_STRING, false, true));
 
                 add(new AtlasAttributeDef(GUID_PROPERTY_KEY, ATLAS_TYPE_STRING, true, true));
+                add(new AtlasAttributeDef(HOME_ID_PROPERTY_KEY, ATLAS_TYPE_STRING, true, true));
                 add(new AtlasAttributeDef(HISTORICAL_GUID_PROPERTY_KEY, ATLAS_TYPE_STRING, true, true));
                 add(new AtlasAttributeDef(TYPE_NAME_PROPERTY_KEY, ATLAS_TYPE_STRING, false, true));
                 add(new AtlasAttributeDef(CLASSIFICATION_TEXT_KEY, ATLAS_TYPE_STRING, false, true));

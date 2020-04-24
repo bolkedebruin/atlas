@@ -85,6 +85,15 @@ import java.util.Objects;
 import java.util.Set;
 
 import static java.lang.Boolean.FALSE;
+import static org.apache.atlas.model.instance.AtlasEntity.KEY_CREATED_BY;
+import static org.apache.atlas.model.instance.AtlasEntity.KEY_CREATE_TIME;
+import static org.apache.atlas.model.instance.AtlasEntity.KEY_HOME_ID;
+import static org.apache.atlas.model.instance.AtlasEntity.KEY_IS_PROXY;
+import static org.apache.atlas.model.instance.AtlasEntity.KEY_PROVENANCE_TYPE;
+import static org.apache.atlas.model.instance.AtlasEntity.KEY_STATUS;
+import static org.apache.atlas.model.instance.AtlasEntity.KEY_UPDATED_BY;
+import static org.apache.atlas.model.instance.AtlasEntity.KEY_UPDATE_TIME;
+import static org.apache.atlas.model.instance.AtlasEntity.KEY_VERSION;
 import static org.apache.atlas.model.instance.EntityMutations.EntityOperation.DELETE;
 import static org.apache.atlas.model.instance.EntityMutations.EntityOperation.PURGE;
 import static org.apache.atlas.model.instance.EntityMutations.EntityOperation.UPDATE;
@@ -1084,7 +1093,7 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
         }
     }
 
-        private EntityMutationResponse createOrUpdate(EntityStream entityStream, boolean isPartialUpdate, boolean replaceClassifications, boolean replaceBusinessAttributes) throws AtlasBaseException {
+    private EntityMutationResponse createOrUpdate(EntityStream entityStream, boolean isPartialUpdate, boolean replaceClassifications, boolean replaceBusinessAttributes) throws AtlasBaseException {
         if (LOG.isDebugEnabled()) {
             LOG.debug("==> createOrUpdate()");
         }
@@ -1104,13 +1113,46 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
         try {
             final EntityMutationContext context = preCreateOrUpdate(entityStream, entityGraphMapper, isPartialUpdate);
 
-            // Check if authorized to create entities
+            // NEW ENTITIES
+
+            // check authorization
             if (!RequestContext.get().isImportInProgress()) {
                 for (AtlasEntity entity : context.getCreatedEntities()) {
                     AtlasAuthorizationUtils.verifyAccess(new AtlasEntityAccessRequest(typeRegistry, AtlasPrivilege.ENTITY_CREATE, new AtlasEntityHeader(entity)),
                                                          "create entity: type=", entity.getTypeName());
+
+                    for (String attribute : getUpdatedAttributes(entity)) {
+                        AtlasAuthorizationUtils.verifyAccess(new AtlasEntityAccessRequest(
+                            typeRegistry,
+                            AtlasPrivilege.ENTITY_CREATE_ATTRIBUTE,
+                            new AtlasEntityHeader(entity),
+                            attribute
+                        ));
+                    }
+
+                    AtlasEntity orig = new AtlasEntity();
+                    List<String> updatedSystemAttributes = getUpdatedSystemAttributes(orig, entity);
+                    for (String systemAttribute : updatedSystemAttributes) {
+                        AtlasAuthorizationUtils.verifyAccess(new AtlasEntityAccessRequest(
+                            typeRegistry,
+                            AtlasPrivilege.ENTITY_CREATE_SYSTEM_ATTRIBUTE,
+                            new AtlasEntityHeader(entity),
+                            systemAttribute
+                        ));
+                    }
                 }
             }
+
+            for (AtlasEntity entity : context.getCreatedEntities()) {
+                AtlasVertex vertex = context.getVertex(entity.getGuid());
+                if (context.isReactivatedEntity(entity.getGuid())) {
+                    LOG.warn("Attempt to activate deleted entity (guid={}).", entity.getGuid());
+                    entityGraphMapper.importActivateEntity(vertex, entity);
+                }
+                entityGraphMapper.updateSystemAttributes(context.getVertex(entity.getGuid()), entity);
+            }
+
+            // EXISTING ENTITIES
 
             // for existing entities, skip update if incoming entity doesn't have any change
             if (CollectionUtils.isNotEmpty(context.getUpdatedEntities())) {
@@ -1122,6 +1164,7 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
                     String          guid       = entity.getGuid();
                     AtlasVertex     vertex     = context.getVertex(guid);
                     AtlasEntityType entityType = typeRegistry.getEntityTypeByName(entity.getTypeName());
+
                     boolean         hasUpdates = false;
 
                     if (!hasUpdates) {
@@ -1145,6 +1188,10 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
                                 }
 
                                 break;
+                            } else {
+                                if (LOG.isDebugEnabled()) {
+                                    LOG.debug("attribute not updated: entity(guid={}, typename={}), attrName={}, currValue={}, newValue={}", guid, entity.getTypeName(), attribute.getName(), currVal, newVal);
+                                }
                             }
                         }
                     }
@@ -1195,6 +1242,14 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
                         }
                     }
 
+                    // check system attributes if homeId is specified as the entity is hosted outside Atlas
+                    AtlasEntity orig = entityRetriever.toAtlasEntity(vertex);
+
+                    final List<String> updatedSystemAttributes = getUpdatedSystemAttributes(orig, entity);
+                    if (updatedSystemAttributes.size() > 0) {
+                        hasUpdates = true;
+                    }
+
                     if (!hasUpdates) {
                         if (entitiesToSkipUpdate == null) {
                             entitiesToSkipUpdate = new ArrayList<>();
@@ -1206,6 +1261,32 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
 
                         entitiesToSkipUpdate.add(entity);
                         RequestContext.get().recordEntityToSkip(entity.getGuid());
+                    }
+
+                    // check if authorized to update the attributes and system attributes
+                    if (hasUpdates && !RequestContext.get().isImportInProgress()) {
+                        for (String attributeName : getUpdatedAttributes(entity)) {
+                            AtlasAuthorizationUtils.verifyAccess(new AtlasEntityAccessRequest(
+                                typeRegistry,
+                                AtlasPrivilege.ENTITY_UPDATE_ATTRIBUTE,
+                                new AtlasEntityHeader(entity),
+                                attributeName
+                            ));
+                        }
+
+                        for (String systemAttribute : updatedSystemAttributes) {
+                            AtlasAuthorizationUtils.verifyAccess(new AtlasEntityAccessRequest(
+                                typeRegistry,
+                                AtlasPrivilege.ENTITY_UPDATE_SYSTEM_ATTRIBUTE,
+                                new AtlasEntityHeader(entity),
+                                systemAttribute
+                            ));
+                        }
+                    }
+
+                    // update system attributes, this happens after authorization check
+                    if (hasUpdates) {
+                        entityGraphMapper.updateSystemAttributes(vertex, entity);
                     }
                 }
 
@@ -1244,6 +1325,79 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
         }
     }
 
+    /**
+     * Checks which values have been set
+     * @param entity
+     * @return list of attributes to update
+     */
+    private List<String> getUpdatedAttributes(AtlasEntity entity) {
+        List<String> updatedAttributes = new ArrayList<>();
+
+        if (entity.getAttributes() == null) {
+            return updatedAttributes;
+        }
+
+        for (Map.Entry<String, Object> attribute : entity.getAttributes().entrySet()) {
+            if (attribute.getValue() != null) {
+                updatedAttributes.add(attribute.getKey());
+            }
+        }
+
+        return updatedAttributes;
+    }
+
+    /**
+     * Compare if system attributes were changed and return changed attribute names
+     * @param orig
+     * @param cur
+     * @return
+     */
+    private List<String> getUpdatedSystemAttributes(AtlasEntity orig, AtlasEntity cur) {
+        List<String> updatedAttributes = new ArrayList<>();
+
+        if (!StringUtils.isEmpty(cur.getHomeId()) && !cur.getHomeId().equals(orig.getHomeId())) {
+            updatedAttributes.add(KEY_HOME_ID);
+        }
+
+        if (!StringUtils.isEmpty(cur.getCreatedBy()) && !cur.getCreatedBy().equals(orig.getCreatedBy())) {
+            updatedAttributes.add(KEY_CREATED_BY);
+        }
+
+        if (cur.getCreateTime() != null && !cur.getCreateTime().equals(orig.getCreateTime())) {
+            updatedAttributes.add(KEY_CREATE_TIME);
+        }
+
+        if (!StringUtils.isEmpty(cur.getUpdatedBy()) && !cur.getUpdatedBy().equals(orig.getUpdatedBy())) {
+            updatedAttributes.add(KEY_UPDATED_BY);
+        }
+
+        if (cur.getUpdateTime() != null && cur.getUpdateTime().equals(orig.getUpdateTime())) {
+            updatedAttributes.add(KEY_UPDATE_TIME);
+        }
+
+        if (cur.getStatus() != null && cur.getStatus() != orig.getStatus()) {
+            updatedAttributes.add(KEY_STATUS);
+        }
+
+        if (!cur.getProvenanceType().equals(orig.getProvenanceType())) {
+            updatedAttributes.add(KEY_PROVENANCE_TYPE);
+        }
+
+        if (!cur.isProxy().equals(orig.isProxy())) {
+            updatedAttributes.add(KEY_IS_PROXY);
+        }
+
+        if (!cur.getVersion().equals(orig.getVersion())) {
+            updatedAttributes.add(KEY_VERSION);
+        }
+
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("found {} as updated system attributes for entity {} orig {}", updatedAttributes, cur, orig);
+        }
+
+        return updatedAttributes;
+    }
+
     private EntityMutationContext preCreateOrUpdate(EntityStream entityStream, EntityGraphMapper entityGraphMapper, boolean isPartialUpdate) throws AtlasBaseException {
         MetricRecorder metric = RequestContext.get().startMetricRecord("preCreateOrUpdate");
 
@@ -1254,6 +1408,10 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
 
         for (String guid : discoveryContext.getReferencedGuids()) {
             AtlasEntity entity = entityStream.getByGuid(guid);
+
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("==> preCreateOrUpdate entity = {}", entity);
+            }
 
             if (entity != null) { // entity would be null if guid is not in the stream but referenced by an entity in the stream
                 AtlasEntityType entityType = typeRegistry.getEntityTypeByName(entity.getTypeName());
@@ -1293,7 +1451,8 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
                     graphDiscoverer.validateAndNormalize(entity);
 
                     //Create vertices which do not exist in the repository
-                    if (RequestContext.get().isImportInProgress() && AtlasTypeUtil.isAssignedGuid(entity.getGuid())) {
+                    if ((!StringUtils.isEmpty(entity.getHomeId()) || RequestContext.get().isImportInProgress())
+                        && AtlasTypeUtil.isAssignedGuid(entity.getGuid())) {
                         vertex = entityGraphMapper.createVertexWithGuid(entity, entity.getGuid());
                     } else {
                          vertex = entityGraphMapper.createVertex(entity);
@@ -1312,28 +1471,20 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
                     context.addCreated(guid, entity, entityType, vertex);
                 }
 
-                // during import, update the system attributes
-                if (RequestContext.get().isImportInProgress()) {
-                    Status newStatus = entity.getStatus();
+                Status newStatus = entity.getStatus();
 
-                    if (newStatus != null) {
-                        Status currStatus = AtlasGraphUtilsV2.getState(vertex);
+                if (newStatus != null) {
+                    Status currStatus = AtlasGraphUtilsV2.getState(vertex);
 
-                        if (currStatus == Status.ACTIVE && newStatus == Status.DELETED) {
-                            if (LOG.isDebugEnabled()) {
-                                LOG.debug("entity-delete via import - guid={}", guid);
-                            }
-
-                            context.addEntityToDelete(vertex);
-                        } else if (currStatus == Status.DELETED && newStatus == Status.ACTIVE) {
-                            LOG.warn("Import is attempting to activate deleted entity (guid={}).", guid);
-                            entityGraphMapper.importActivateEntity(vertex, entity);
-                            context.addCreated(guid, entity, entityType, vertex);
-                        }
+                    if (currStatus == Status.ACTIVE && newStatus == Status.DELETED) {
+                        context.addEntityToDelete(vertex);
+                    } else if (currStatus == Status.DELETED && newStatus == Status.ACTIVE) {
+                        LOG.warn("Attempt to activate deleted entity (guid={}).", guid);
+                        entityGraphMapper.importActivateEntity(vertex, entity);
+                        context.addCreated(guid, entity, entityType, vertex, true);
                     }
-
-                    entityGraphMapper.updateSystemAttributes(vertex, entity);
                 }
+
             }
         }
 

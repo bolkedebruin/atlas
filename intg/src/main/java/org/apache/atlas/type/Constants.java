@@ -40,6 +40,7 @@ public final class Constants {
      * Entity-Only System Attributes
      */
     public static final String GUID_PROPERTY_KEY                    = encodePropertyKey(INTERNAL_PROPERTY_KEY_PREFIX + "guid");
+    public static final String HOME_ID_PROPERTY_KEY                 = encodePropertyKey(INTERNAL_PROPERTY_KEY_PREFIX + "homeId");
     public static final String HISTORICAL_GUID_PROPERTY_KEY         = encodePropertyKey(INTERNAL_PROPERTY_KEY_PREFIX + "historicalGuids");
     public static final String LABELS_PROPERTY_KEY                  = encodePropertyKey(INTERNAL_PROPERTY_KEY_PREFIX + "labels");
     public static final String CUSTOM_ATTRIBUTES_PROPERTY_KEY       = encodePropertyKey(INTERNAL_PROPERTY_KEY_PREFIX + "customAttributes");

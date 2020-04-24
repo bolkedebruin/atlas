@@ -73,11 +73,7 @@ public class IDBasedEntityResolver implements EntityResolver {
             if (vertex != null) {
                 context.addResolvedGuid(guid, vertex);
             } else {
-                if (isAssignedGuid && !RequestContext.get().isImportInProgress()) {
-                    throw new AtlasBaseException(AtlasErrorCode.REFERENCED_ENTITY_NOT_FOUND, guid);
-                } else {
-                    context.addLocalGuidReference(guid);
-                }
+                context.addLocalGuidReference(guid);
             }
         }
 

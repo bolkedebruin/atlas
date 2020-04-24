@@ -20,7 +20,8 @@
           "entityIds":       [ ".*" ],
           "classifications": [ ".*" ],
           "labels":          [ ".*" ],
-          "namespaces":      [ ".*" ]
+          "namespaces":      [ ".*" ],
+          "attributes":      [ ".*" ]
         }
       ],
       "relationshipPermissions": [

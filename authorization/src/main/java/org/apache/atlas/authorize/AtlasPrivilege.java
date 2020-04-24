@@ -31,6 +31,12 @@ public enum AtlasPrivilege {
      ENTITY_UPDATE_CLASSIFICATION("entity-update-classification"),
      ENTITY_REMOVE_CLASSIFICATION("entity-remove-classification"),
 
+     ENTITY_CREATE_SYSTEM_ATTRIBUTE("entity-create-system-attribute"),
+     ENTITY_UPDATE_SYSTEM_ATTRIBUTE("entity-update-system-attribute"),
+
+     ENTITY_CREATE_ATTRIBUTE("entity-create-attribute"),
+     ENTITY_UPDATE_ATTRIBUTE("entity-update-attribute"),
+
      ADMIN_EXPORT("admin-export"),
      ADMIN_IMPORT("admin-import"),
 

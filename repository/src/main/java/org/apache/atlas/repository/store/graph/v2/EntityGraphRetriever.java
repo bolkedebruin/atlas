@@ -776,6 +776,10 @@ public class EntityGraphRetriever {
         entity.setCustomAttributes(getCustomAttributes(entityVertex));
         entity.setLabels(getLabels(entityVertex));
 
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Mapped system attributes for entity: {}", entity.toString());
+        }
+
         return entity;
     }
 

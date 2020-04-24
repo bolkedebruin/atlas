@@ -28,12 +28,13 @@ import java.util.*;
 
 public class EntityMutationContext {
     private final EntityGraphDiscoveryContext  context;
-    private final List<AtlasEntity>            entitiesCreated  = new ArrayList<>();
-    private final List<AtlasEntity>            entitiesUpdated  = new ArrayList<>();
-    private final Map<String, AtlasEntityType> entityVsType     = new HashMap<>();
-    private final Map<String, AtlasVertex>     entityVsVertex   = new HashMap<>();
-    private final Map<String, String>          guidAssignments  = new HashMap<>();
-    private       List<AtlasVertex>            entitiesToDelete = null;
+    private final List<AtlasEntity>            entitiesCreated      = new ArrayList<>();
+    private final List<AtlasEntity>            entitiesUpdated      = new ArrayList<>();
+    private final Map<String, AtlasEntityType> entityVsType         = new HashMap<>();
+    private final Map<String, AtlasVertex>     entityVsVertex       = new HashMap<>();
+    private final Map<String, String>          guidAssignments      = new HashMap<>();
+    private       List<AtlasVertex>            entitiesToDelete     = null;
+    private final List<String>                 reactivatedEntities  = new ArrayList<>();
 
     public EntityMutationContext(final EntityGraphDiscoveryContext context) {
         this.context = context;
@@ -43,7 +44,7 @@ public class EntityMutationContext {
         this.context = null;
     }
 
-    public void addCreated(String internalGuid, AtlasEntity entity, AtlasEntityType type, AtlasVertex atlasVertex) {
+    public void addCreated(String internalGuid, AtlasEntity entity, AtlasEntityType type, AtlasVertex atlasVertex, boolean reactivate) {
         entitiesCreated.add(entity);
         entityVsType.put(entity.getGuid(), type);
         entityVsVertex.put(entity.getGuid(), atlasVertex);
@@ -52,6 +53,14 @@ public class EntityMutationContext {
             guidAssignments.put(internalGuid, entity.getGuid());
             entityVsVertex.put(internalGuid, atlasVertex);
         }
+
+        if (reactivate) {
+            reactivatedEntities.add(entity.getGuid());
+        }
+    }
+
+    public void addCreated(String internalGuid, AtlasEntity entity, AtlasEntityType type, AtlasVertex atlasVertex) {
+        addCreated(internalGuid, entity, type, atlasVertex, false);
     }
 
     public void addUpdated(String internalGuid, AtlasEntity entity, AtlasEntityType type, AtlasVertex atlasVertex) {
@@ -170,5 +179,9 @@ public class EntityMutationContext {
         }
 
         return e;
+    }
+
+    public boolean isReactivatedEntity(String guid) {
+        return reactivatedEntities.contains(guid);
     }
 }

@@ -540,6 +540,7 @@ public class AtlasEntityStoreV2Test extends AtlasEntityTestBase {
 
     @Test(dependsOnMethods = "testCreate")
     public void testClassUpdate() throws Exception {
+        final String homeId = "a-home-id";
 
         init();
         //Create new db instance
@@ -552,6 +553,7 @@ public class AtlasEntityStoreV2Test extends AtlasEntityTestBase {
         Map<String, AtlasEntity> tableCloneMap = new HashMap<>();
         AtlasEntity tableClone = new AtlasEntity(tblEntity.getEntity());
         tableClone.setAttribute("database", new AtlasObjectId(dbCreated.getGuid(), TestUtilsV2.DATABASE_TYPE));
+        tableClone.setHomeId(homeId);
 
         tableCloneMap.put(dbCreated.getGuid(), databaseInstance);
         tableCloneMap.put(tableClone.getGuid(), tableClone);
@@ -560,6 +562,7 @@ public class AtlasEntityStoreV2Test extends AtlasEntityTestBase {
         final AtlasEntityHeader tableDefinition = response.getFirstUpdatedEntityByTypeName(TABLE_TYPE);
         AtlasEntity updatedTableDefinition = getEntityFromStore(tableDefinition);
         assertNotNull(updatedTableDefinition.getAttribute("database"));
+        Assert.assertEquals(updatedTableDefinition.getHomeId(), homeId);
         Assert.assertEquals(((AtlasObjectId) updatedTableDefinition.getAttribute("database")).getGuid(), dbCreated.getGuid());
     }
 
