@@ -18,10 +18,12 @@
 package org.apache.atlas.authorize;
 
 import org.apache.atlas.model.instance.AtlasClassification;
+import org.apache.atlas.model.instance.AtlasEntity;
 import org.apache.atlas.model.instance.AtlasEntityHeader;
 import org.apache.atlas.type.AtlasTypeRegistry;
 import org.apache.commons.lang.StringUtils;
 
+import java.util.List;
 import java.util.Set;
 
 public class AtlasEntityAccessRequest extends AtlasAccessRequest {
@@ -30,44 +32,39 @@ public class AtlasEntityAccessRequest extends AtlasAccessRequest {
     private final AtlasClassification classification;
     private final String              label;
     private final String              businessMetadata;
-    private final String              attributeName;
+    private final List<String>        attributes;
+    private final List<String>        systemAttributes;
     private final AtlasTypeRegistry   typeRegistry;
     private final Set<String>         entityClassifications;
 
 
     public AtlasEntityAccessRequest(AtlasTypeRegistry typeRegistry, AtlasPrivilege action) {
-        this(typeRegistry, action, null, null, null, null, null, null, null);
+        this(typeRegistry, action, null, null, null, null, null, null, null, null);
     }
 
     public AtlasEntityAccessRequest(AtlasTypeRegistry typeRegistry, AtlasPrivilege action, AtlasEntityHeader entity) {
-        this(typeRegistry, action, entity, null, null, null, null, null, null);
+        this(typeRegistry, action, entity, null, null, null, null, null, null, null);
     }
 
     public AtlasEntityAccessRequest(AtlasTypeRegistry typeRegistry, AtlasPrivilege action, AtlasEntityHeader entity, AtlasClassification classification) {
-        this(typeRegistry, action, entity, classification, null, null, null, null, null);
-    }
-
-    public AtlasEntityAccessRequest(AtlasTypeRegistry typeRegistry, AtlasPrivilege action, AtlasEntityHeader entity, String attributeName) {
-        this(typeRegistry, action, entity, null, attributeName, null, null, null, null);
+        this(typeRegistry, action, entity, classification, null, null, null, null, null, null);
     }
 
     public AtlasEntityAccessRequest(AtlasTypeRegistry typeRegistry, AtlasPrivilege action, AtlasEntityHeader entity, String userName, Set<String> userGroups) {
-        this(typeRegistry, action, entity, null, null, null, null, userName, userGroups);
+        this(typeRegistry, action, entity, null, null, null, null, null, userName, userGroups);
     }
 
     public AtlasEntityAccessRequest(AtlasTypeRegistry typeRegistry, AtlasPrivilege action, AtlasEntityHeader entity, AtlasClassification classification, String userName, Set<String> userGroups) {
-        this(typeRegistry, action, entity, classification, null, null, null, userName, userGroups);
+        this(typeRegistry, action, entity, classification, null, null, null, null, userName, userGroups);
     }
 
-    public AtlasEntityAccessRequest(AtlasTypeRegistry typeRegistry, AtlasPrivilege action, AtlasEntityHeader entity, String attributeName, String userName, Set<String> userGroups) {
-        this(typeRegistry, action, entity, null, attributeName, null, null, userName, userGroups);
+    public AtlasEntityAccessRequest(AtlasTypeRegistry typeRegistry, AtlasPrivilege action, AtlasEntityHeader entity, List<String> attributes, List<String> systemAttributes) {
+        this(typeRegistry, action, entity, null, attributes, systemAttributes, null, null, null, null);
     }
 
-    public AtlasEntityAccessRequest(AtlasTypeRegistry typeRegistry, AtlasPrivilege action, AtlasEntityHeader entity, AtlasClassification classification, String attributeName, String userName, Set<String> userGroups) {
-        this(typeRegistry, action, entity, classification, attributeName, null, null, userName, userGroups);
-    }
-
-    public AtlasEntityAccessRequest(AtlasTypeRegistry typeRegistry, AtlasPrivilege action, AtlasEntityHeader entity, AtlasClassification classification, String attributeName, String label, String businessMetadata, String userName, Set<String> userGroups) {
+    public AtlasEntityAccessRequest(AtlasTypeRegistry typeRegistry, AtlasPrivilege action, AtlasEntityHeader entity,
+                                    AtlasClassification classification, List<String> attributes,
+                                    List<String> systemAttributes, String label, String businessMetadata, String userName, Set<String> userGroups) {
         super(action, userName, userGroups);
 
         this.entity                = entity;
@@ -75,7 +72,8 @@ public class AtlasEntityAccessRequest extends AtlasAccessRequest {
         this.classification        = classification;
         this.label                 = label;
         this.businessMetadata      = businessMetadata;
-        this.attributeName         = attributeName;
+        this.attributes            = attributes;
+        this.systemAttributes      = systemAttributes;
         this.typeRegistry          = typeRegistry;
         this.entityClassifications = super.getClassificationNames(entity);
     }
@@ -100,9 +98,11 @@ public class AtlasEntityAccessRequest extends AtlasAccessRequest {
         return businessMetadata;
     }
 
-    public String getAttributeName() {
-        return attributeName;
+    public List<String> getAttributes() {
+        return attributes;
     }
+
+    public List<String> getSystemAttributes() { return systemAttributes; }
 
     public String getEntityType() {
         return entity == null ? StringUtils.EMPTY : entity.getTypeName();
@@ -122,8 +122,8 @@ public class AtlasEntityAccessRequest extends AtlasAccessRequest {
 
     @Override
     public String toString() {
-        return "AtlasEntityAccessRequest[entity=" + entity + ", classification=" + classification + ", label=" + label + ", businessMetadata=" + businessMetadata + ", attributeName=" + attributeName +
-                ", action=" + getAction() + ", accessTime=" + getAccessTime() + ", user=" + getUser() +
+        return "AtlasEntityAccessRequest[entity=" + entity + ", classification=" + classification + ", label=" + label + ", businessMetadata=" + businessMetadata + ", attributes=" + attributes +
+                ", systemAttributes=" + systemAttributes + ", action=" + getAction() + ", accessTime=" + getAccessTime() + ", user=" + getUser() +
                 ", userGroups=" + getUserGroups() + ", clientIPAddress=" + getClientIPAddress() +
                 ", forwardedAddresses=" + getForwardedAddresses() + ", remoteIPAddress=" + getRemoteIPAddress() + "]";
     }
@@ -137,7 +137,8 @@ public class AtlasEntityAccessRequest extends AtlasAccessRequest {
         private       AtlasClassification classification;
         private       String              label;
         private       String              businessMetadata;
-        private       String              attributeName;
+        private       List<String>        attributes;
+        private       List<String>        systemAttributes;
 
         public AtlasEntityAccessRequestBuilder(AtlasTypeRegistry typeRegistry, AtlasPrivilege action) {
             this.typeRegistry = typeRegistry;
@@ -186,14 +187,20 @@ public class AtlasEntityAccessRequest extends AtlasAccessRequest {
             return this;
         }
 
-        public AtlasEntityAccessRequestBuilder setAttributeName(String attributeName) {
-            this.attributeName = attributeName;
+        public AtlasEntityAccessRequestBuilder setAttributes(List<String> attributes) {
+            this.attributes = attributes;
+
+            return this;
+        }
+
+        public AtlasEntityAccessRequestBuilder setSystemAttributes(List<String> systemAttributes) {
+            this.systemAttributes = systemAttributes;
 
             return this;
         }
 
         public AtlasEntityAccessRequest build() {
-            return new AtlasEntityAccessRequest(typeRegistry, action, entity, classification, attributeName, label, businessMetadata, userName, userGroups);
+            return new AtlasEntityAccessRequest(typeRegistry, action, entity, classification, attributes, systemAttributes, label, businessMetadata, userName, userGroups);
         }
     }
 }

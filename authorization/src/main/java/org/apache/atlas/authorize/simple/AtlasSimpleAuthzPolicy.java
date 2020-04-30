@@ -212,15 +212,16 @@ public class AtlasSimpleAuthzPolicy implements Serializable {
         private List<String> labels;           // labels, wildcards supported
         private List<String> businessMetadata; // name of business-metadata, wildcards supported
         private List<String> attributes;       // name of entity-attribute, wildcards supported
+        private List<String> systemAttributes; // name of system-attributem wildcards supported
 
         public AtlasEntityPermission() {
         }
 
-        public AtlasEntityPermission(List<String> privileges, List<String> entityTypes, List<String> entityIds, List<String> classifications, List<String> attributes) {
-            this(privileges, entityTypes, entityIds, classifications, attributes, null, null);
+        public AtlasEntityPermission(List<String> privileges, List<String> entityTypes, List<String> entityIds, List<String> classifications, List<String> attributes, List<String> systemAttributes) {
+            this(privileges, entityTypes, entityIds, classifications, attributes, null, null, null);
         }
 
-        public AtlasEntityPermission(List<String> privileges, List<String> entityTypes, List<String> entityIds, List<String> classifications, List<String> labels, List<String> businessMetadata, List<String> attributes) {
+        public AtlasEntityPermission(List<String> privileges, List<String> entityTypes, List<String> entityIds, List<String> classifications, List<String> labels, List<String> businessMetadata, List<String> attributes, List<String> systemAttributes) {
             this.privileges       = privileges;
             this.entityTypes      = entityTypes;
             this.entityIds        = entityIds;
@@ -228,6 +229,7 @@ public class AtlasSimpleAuthzPolicy implements Serializable {
             this.labels           = labels;
             this.businessMetadata = businessMetadata;
             this.attributes       = attributes;
+            this.systemAttributes = systemAttributes;
         }
 
         public List<String> getPrivileges() {
@@ -285,6 +287,10 @@ public class AtlasSimpleAuthzPolicy implements Serializable {
         public void setAttributes(List<String> attributes) {
             this.attributes = attributes;
         }
+
+        public List<String> getSystemAttributes() { return systemAttributes; }
+
+        public void setSystemAttributes(List<String> systemAttributes) { this.systemAttributes = systemAttributes; }
     }
 
 

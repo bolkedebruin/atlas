@@ -20,6 +20,7 @@ package org.apache.atlas.authorize.simple;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -223,15 +224,16 @@ public final class AtlasSimpleAuthorizer implements AtlasAuthorizer {
             LOG.debug("==> SimpleAtlasAuthorizer.isAccessAllowed({})", request);
         }
 
-        final String      action         = request.getAction() != null ? request.getAction().getType() : null;
-        final Set<String> entityTypes    = request.getEntityTypeAndAllSuperTypes();
-        final String      entityId       = request.getEntityId();
-        final String      classification = request.getClassification() != null ? request.getClassification().getTypeName() : null;
-        final String      attribute      = request.getAttributeName();
-        final Set<String> entClsToAuthz  = new HashSet<>(request.getEntityClassifications());
-        final Set<String> roles          = getRoles(request.getUser(), request.getUserGroups());
-        boolean hasEntityAccess          = false;
-        boolean hasClassificationsAccess = false;
+        final String        action              = request.getAction() != null ? request.getAction().getType() : null;
+        final Set<String>   entityTypes         = request.getEntityTypeAndAllSuperTypes();
+        final String        entityId            = request.getEntityId();
+        final String        classification      = request.getClassification() != null ? request.getClassification().getTypeName() : null;
+        final List<String>  attributes          = request.getAttributes();
+        final List<String>  systemAttributes    = request.getSystemAttributes();
+        final Set<String>   entClsToAuthz       = new HashSet<>(request.getEntityClassifications());
+        final Set<String>   roles               = getRoles(request.getUser(), request.getUserGroups());
+        boolean hasEntityAccess                 = false;
+        boolean hasClassificationsAccess        = false;
 
         for (String role : roles) {
             List<AtlasEntityPermission> permissions = getEntityPermissionsForRole(role);
@@ -239,8 +241,8 @@ public final class AtlasSimpleAuthorizer implements AtlasAuthorizer {
             if (permissions != null) {
                 for (AtlasEntityPermission permission : permissions) {
                     // match entity-type/entity-id/label/business-metadata/attribute
-                    if (isMatchAny(entityTypes, permission.getEntityTypes()) && isMatch(entityId, permission.getEntityIds()) && isMatch(attribute, permission.getAttributes())
-                         && isLabelMatch(request, permission) && isBusinessMetadataMatch(request, permission)) {
+                    if (isMatchAny(entityTypes, permission.getEntityTypes()) && isMatch(entityId, permission.getEntityIds()) && isMatchAll(attributes, permission.getAttributes())
+                         && isLabelMatch(request, permission) && isBusinessMetadataMatch(request, permission) && isMatchAll(systemAttributes, permission.getSystemAttributes())) {
                         // match permission/classification
                         if (!hasEntityAccess) {
                             if (isMatch(action, permission.getPrivileges()) && isMatch(classification, permission.getClassifications())) {
@@ -409,6 +411,38 @@ public final class AtlasSimpleAuthorizer implements AtlasAuthorizer {
 
         if (!ret && LOG.isDebugEnabled()) {
             LOG.debug("<== isMatch({}, {}): {}", value, patterns, ret);
+        }
+
+        return ret;
+    }
+
+    private boolean isMatchAll(List<String> values, List<String> patterns)
+    {
+        boolean ret = false;
+
+        // all values need to match in patterns
+        if (CollectionUtils.isEmpty(values)) {
+            return true;
+        }
+
+        List<String> matches = new ArrayList<>();
+        if (CollectionUtils.isNotEmpty(patterns)) {
+            for (String pattern : patterns) {
+                for (String value : values) {
+                    if (matches.contains(value))
+                        continue;
+
+                    if (isMatch(value, pattern)) {
+                        matches.add(value);
+                    }
+                }
+            }
+        }
+
+        if (matches.size() == values.size()) {
+            ret = true;
+        } else if (LOG.isDebugEnabled()) {
+            LOG.debug("<== isMatch({}, {}): {}", values, patterns, ret);
         }
 
         return ret;

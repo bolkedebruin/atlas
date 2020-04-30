@@ -1118,28 +1118,15 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
             // check authorization
             if (!RequestContext.get().isImportInProgress()) {
                 for (AtlasEntity entity : context.getCreatedEntities()) {
-                    AtlasAuthorizationUtils.verifyAccess(new AtlasEntityAccessRequest(typeRegistry, AtlasPrivilege.ENTITY_CREATE, new AtlasEntityHeader(entity)),
-                                                         "create entity: type=", entity.getTypeName());
-
-                    for (String attribute : getUpdatedAttributes(entity)) {
-                        AtlasAuthorizationUtils.verifyAccess(new AtlasEntityAccessRequest(
-                            typeRegistry,
-                            AtlasPrivilege.ENTITY_CREATE_ATTRIBUTE,
-                            new AtlasEntityHeader(entity),
-                            attribute
-                        ));
-                    }
-
-                    AtlasEntity orig = new AtlasEntity();
-                    List<String> updatedSystemAttributes = getUpdatedSystemAttributes(orig, entity);
-                    for (String systemAttribute : updatedSystemAttributes) {
-                        AtlasAuthorizationUtils.verifyAccess(new AtlasEntityAccessRequest(
-                            typeRegistry,
-                            AtlasPrivilege.ENTITY_CREATE_SYSTEM_ATTRIBUTE,
-                            new AtlasEntityHeader(entity),
-                            systemAttribute
-                        ));
-                    }
+                    final AtlasEntity orig = new AtlasEntity();
+                    AtlasAuthorizationUtils.verifyAccess(
+                        new AtlasEntityAccessRequest(typeRegistry,
+                                                     AtlasPrivilege.ENTITY_CREATE,
+                                                     new AtlasEntityHeader(entity),
+                                                     getUpdatedAttributes(entity),
+                                                     getUpdatedSystemAttributes(orig, entity)),
+                                                         "create entity: type=", entity.getTypeName()
+                    );
                 }
             }
 
@@ -1161,9 +1148,10 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
                 List<AtlasEntity> entitiesToSkipUpdate = null;
 
                 for (AtlasEntity entity : context.getUpdatedEntities()) {
-                    String          guid       = entity.getGuid();
-                    AtlasVertex     vertex     = context.getVertex(guid);
-                    AtlasEntityType entityType = typeRegistry.getEntityTypeByName(entity.getTypeName());
+                    final String          guid       = entity.getGuid();
+                    final AtlasVertex     vertex     = context.getVertex(guid);
+                    final AtlasEntityType entityType = typeRegistry.getEntityTypeByName(entity.getTypeName());
+                    final AtlasEntity orig           = entityRetriever.toAtlasEntity(vertex);
 
                     boolean         hasUpdates = false;
 
@@ -1243,8 +1231,6 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
                     }
 
                     // check system attributes if homeId is specified as the entity is hosted outside Atlas
-                    AtlasEntity orig = entityRetriever.toAtlasEntity(vertex);
-
                     final List<String> updatedSystemAttributes = getUpdatedSystemAttributes(orig, entity);
                     if (updatedSystemAttributes.size() > 0) {
                         hasUpdates = true;
@@ -1263,25 +1249,16 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
                         RequestContext.get().recordEntityToSkip(entity.getGuid());
                     }
 
-                    // check if authorized to update the attributes and system attributes
+                    // check if authorized to update the entity
                     if (hasUpdates && !RequestContext.get().isImportInProgress()) {
-                        for (String attributeName : getUpdatedAttributes(entity)) {
-                            AtlasAuthorizationUtils.verifyAccess(new AtlasEntityAccessRequest(
-                                typeRegistry,
-                                AtlasPrivilege.ENTITY_UPDATE_ATTRIBUTE,
-                                new AtlasEntityHeader(entity),
-                                attributeName
-                            ));
-                        }
-
-                        for (String systemAttribute : updatedSystemAttributes) {
-                            AtlasAuthorizationUtils.verifyAccess(new AtlasEntityAccessRequest(
-                                typeRegistry,
-                                AtlasPrivilege.ENTITY_UPDATE_SYSTEM_ATTRIBUTE,
-                                new AtlasEntityHeader(entity),
-                                systemAttribute
-                            ));
-                        }
+                        AtlasAuthorizationUtils.verifyAccess(
+                            new AtlasEntityAccessRequest(typeRegistry,
+                                                         AtlasPrivilege.ENTITY_UPDATE,
+                                                         new AtlasEntityHeader(entity),
+                                                         getUpdatedAttributes(entity),
+                                                         updatedSystemAttributes),
+                            "update entity: type=", entity.getTypeName()
+                        );
                     }
 
                     // update system attributes, this happens after authorization check
@@ -1293,14 +1270,6 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
                 if (entitiesToSkipUpdate != null) {
                     // remove entitiesToSkipUpdate from EntityMutationContext
                     context.getUpdatedEntities().removeAll(entitiesToSkipUpdate);
-                }
-
-                // Check if authorized to update entities
-                if (!RequestContext.get().isImportInProgress()) {
-                    for (AtlasEntity entity : context.getUpdatedEntities()) {
-                        AtlasAuthorizationUtils.verifyAccess(new AtlasEntityAccessRequest(typeRegistry, AtlasPrivilege.ENTITY_UPDATE, new AtlasEntityHeader(entity)),
-                                                             "update entity: type=", entity.getTypeName());
-                    }
                 }
 
                 RequestContext.get().endMetricRecord(checkForUnchangedEntities);
