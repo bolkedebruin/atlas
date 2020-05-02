@@ -79,15 +79,15 @@ public class AtlasEntity extends AtlasStruct implements Serializable {
 
     private String  guid           = null;
     private String  homeId         = null;
-    private Boolean isProxy        = Boolean.FALSE;
-    private Boolean isIncomplete   = Boolean.FALSE;
-    private Integer provenanceType = 0;
-    private Status  status         = Status.ACTIVE;
+    private Boolean isProxy        = null;
+    private Boolean isIncomplete   = null;
+    private Integer provenanceType = null;
+    private Status  status         = null;
     private String  createdBy      = null;
     private String  updatedBy      = null;
     private Date    createTime     = null;
     private Date    updateTime     = null;
-    private Long    version        = 0L;
+    private Long    version        = null;
 
     private Map<String, Object>              relationshipAttributes;
     private List<AtlasClassification>        classifications;
@@ -99,9 +99,7 @@ public class AtlasEntity extends AtlasStruct implements Serializable {
     @JsonIgnore
     private static AtomicLong s_nextId = new AtomicLong(System.nanoTime());
 
-    public AtlasEntity() {
-        this(null, null);
-    }
+    public AtlasEntity() { this(null, null); }
 
     public AtlasEntity(String typeName) {
         this(typeName, null);
@@ -443,6 +441,7 @@ public class AtlasEntity extends AtlasStruct implements Serializable {
         setCustomAttributes(null);
         setBusinessAttributes(null);
         setLabels(null);
+        setVersion(0L);
     }
 
     private static String nextInternalId() {

@@ -18,6 +18,7 @@
 package org.apache.atlas.repository.store.graph.v2;
 
 import com.google.common.collect.ImmutableSet;
+import org.apache.atlas.ApplicationProperties;
 import org.apache.atlas.AtlasErrorCode;
 import org.apache.atlas.RequestContext;
 import org.apache.atlas.TestModules;
@@ -539,8 +540,10 @@ public class AtlasEntityStoreV2Test extends AtlasEntityTestBase {
     }
 
     @Test(dependsOnMethods = "testCreate")
-    public void testClassUpdate() throws Exception {
-        final String homeId = "a-home-id";
+    public void testClassUpdateWithoutUpdateSystemAttributes() throws Exception {
+        ApplicationProperties.get().setProperty(ApplicationProperties.ENABLE_UPDATE_SYSTEM_ATTRIBUTES, false);
+
+        final String homeId = "this-should-not-be-set";
 
         init();
         //Create new db instance
@@ -559,11 +562,52 @@ public class AtlasEntityStoreV2Test extends AtlasEntityTestBase {
         tableCloneMap.put(tableClone.getGuid(), tableClone);
 
         response = entityStore.createOrUpdate(new InMemoryMapEntityStream(tableCloneMap), false);
+
         final AtlasEntityHeader tableDefinition = response.getFirstUpdatedEntityByTypeName(TABLE_TYPE);
         AtlasEntity updatedTableDefinition = getEntityFromStore(tableDefinition);
         assertNotNull(updatedTableDefinition.getAttribute("database"));
-        Assert.assertEquals(updatedTableDefinition.getHomeId(), homeId);
+        Assert.assertEquals(updatedTableDefinition.getHomeId(), null);
         Assert.assertEquals(((AtlasObjectId) updatedTableDefinition.getAttribute("database")).getGuid(), dbCreated.getGuid());
+    }
+
+    @Test(dependsOnMethods = "testCreate")
+    public void testClassUpdateWithUpdateSystemAttributes() throws Exception {
+        ApplicationProperties.get().setProperty(ApplicationProperties.ENABLE_UPDATE_SYSTEM_ATTRIBUTES, true);
+
+        final String homeId = "a-home-id";
+
+        init();
+        //Create new db instance
+        final AtlasEntity databaseInstance = TestUtilsV2.createDBEntity();
+
+        EntityMutationResponse response = entityStore.createOrUpdate(new AtlasEntityStream(databaseInstance), false);
+        final AtlasEntityHeader dbCreated = response.getFirstCreatedEntityByTypeName(TestUtilsV2.DATABASE_TYPE);
+
+        init();
+        AtlasEntity table = TestUtilsV2.createTableEntity(databaseInstance, "testClassUpdateWithUpdateSystemAttributes");
+        table.setHomeId(homeId);
+        table.setProvenanceType(10);
+        table.setIsProxy(true);
+        table.setVersion(5L);
+
+        Map<String, AtlasEntity> tableCloneMap = new HashMap<>();
+        tableCloneMap.put(dbCreated.getGuid(), databaseInstance);
+        tableCloneMap.put(table.getGuid(), table);
+
+        response = entityStore.createOrUpdate(new InMemoryMapEntityStream(tableCloneMap), false);
+
+        final AtlasEntityHeader tableDefinition = response.getFirstCreatedEntityByTypeName(TABLE_TYPE);
+        AtlasEntity updatedTableDefinition = getEntityFromStore(tableDefinition);
+
+        assertNotNull(updatedTableDefinition.getAttribute("database"));
+        Assert.assertEquals(updatedTableDefinition.getHomeId(), homeId);
+        Assert.assertEquals(updatedTableDefinition.getProvenanceType().intValue(), 10);
+        Assert.assertEquals(updatedTableDefinition.isProxy().booleanValue(), true);
+        Assert.assertEquals(updatedTableDefinition.getVersion().longValue(), 5L);
+
+        Assert.assertEquals(((AtlasObjectId) updatedTableDefinition.getAttribute("database")).getGuid(), dbCreated.getGuid());
+
+        ApplicationProperties.get().setProperty(ApplicationProperties.ENABLE_UPDATE_SYSTEM_ATTRIBUTES, false);
     }
 
     @Test

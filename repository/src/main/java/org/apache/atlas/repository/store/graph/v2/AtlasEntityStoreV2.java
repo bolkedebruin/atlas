@@ -18,7 +18,9 @@
 package org.apache.atlas.repository.store.graph.v2;
 
 
+import org.apache.atlas.ApplicationProperties;
 import org.apache.atlas.AtlasErrorCode;
+import org.apache.atlas.AtlasException;
 import org.apache.atlas.GraphTransactionInterceptor;
 import org.apache.atlas.RequestContext;
 import org.apache.atlas.annotation.GraphTransaction;
@@ -65,6 +67,7 @@ import org.apache.atlas.utils.AtlasPerfMetrics.MetricRecorder;
 import org.apache.atlas.utils.AtlasPerfTracer;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
+import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -116,6 +119,7 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
     private final EntityGraphMapper         entityGraphMapper;
     private final EntityGraphRetriever      entityRetriever;
 
+    private final boolean enableUpdateSystemAttributes;
 
     @Inject
     public AtlasEntityStoreV2(DeleteHandlerDelegate deleteDelegate, AtlasTypeRegistry typeRegistry,
@@ -125,6 +129,23 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
         this.entityChangeNotifier = entityChangeNotifier;
         this.entityGraphMapper    = entityGraphMapper;
         this.entityRetriever      = new EntityGraphRetriever(typeRegistry);
+
+        Configuration configuration = null;
+
+        try {
+            configuration = ApplicationProperties.get();
+        } catch (AtlasException e) {
+            LOG.error("Exception while fetching configuration", e);
+        }
+
+        if (configuration != null) {
+            enableUpdateSystemAttributes = configuration.getBoolean(
+                ApplicationProperties.ENABLE_UPDATE_SYSTEM_ATTRIBUTES,
+                false
+            );
+        } else {
+            enableUpdateSystemAttributes = false;
+        }
     }
 
     @Override
@@ -436,7 +457,7 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
         }
 
         AtlasType   attrType     = attr.getAttributeType();
-        AtlasEntity updateEntity = new AtlasEntity();
+        AtlasEntity updateEntity = new AtlasEntity(entity.getTypeName());
 
         updateEntity.setGuid(guid);
         updateEntity.setTypeName(entity.getTypeName());
@@ -1130,13 +1151,15 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
                 }
             }
 
-            for (AtlasEntity entity : context.getCreatedEntities()) {
-                AtlasVertex vertex = context.getVertex(entity.getGuid());
-                if (context.isReactivatedEntity(entity.getGuid())) {
-                    LOG.warn("Attempt to activate deleted entity (guid={}).", entity.getGuid());
-                    entityGraphMapper.importActivateEntity(vertex, entity);
+            if (enableUpdateSystemAttributes || RequestContext.get().isImportInProgress()) {
+                for (AtlasEntity entity : context.getCreatedEntities()) {
+                    AtlasVertex vertex = context.getVertex(entity.getGuid());
+                    if (context.isReactivatedEntity(entity.getGuid())) {
+                        LOG.warn("Attempt to activate deleted entity (guid={}).", entity.getGuid());
+                        entityGraphMapper.importActivateEntity(vertex, entity);
+                    }
+                    entityGraphMapper.updateSystemAttributes(context.getVertex(entity.getGuid()), entity);
                 }
-                entityGraphMapper.updateSystemAttributes(context.getVertex(entity.getGuid()), entity);
             }
 
             // EXISTING ENTITIES
@@ -1262,7 +1285,7 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
                     }
 
                     // update system attributes, this happens after authorization check
-                    if (hasUpdates) {
+                    if ((hasUpdates && enableUpdateSystemAttributes) || RequestContext.get().isImportInProgress()) {
                         entityGraphMapper.updateSystemAttributes(vertex, entity);
                     }
                 }
@@ -1348,15 +1371,15 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
             updatedAttributes.add(KEY_STATUS);
         }
 
-        if (!cur.getProvenanceType().equals(orig.getProvenanceType())) {
+        if (cur.getProvenanceType() != null && !cur.getProvenanceType().equals(orig.getProvenanceType())) {
             updatedAttributes.add(KEY_PROVENANCE_TYPE);
         }
 
-        if (!cur.isProxy().equals(orig.isProxy())) {
+        if (cur.isProxy() != null && !cur.isProxy().equals(orig.isProxy())) {
             updatedAttributes.add(KEY_IS_PROXY);
         }
 
-        if (!cur.getVersion().equals(orig.getVersion())) {
+        if (cur.getVersion() != null && !cur.getVersion().equals(orig.getVersion())) {
             updatedAttributes.add(KEY_VERSION);
         }
 
@@ -1706,7 +1729,6 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
 
         for (int lineIndex = 0; lineIndex < fileData.size(); lineIndex++) {
             List<String> failedTermMsgList = new ArrayList<>();
-            AtlasEntity atlasEntity = new AtlasEntity();
             String[] record = fileData.get(lineIndex);
             if (missingFieldsCheck(record, bulkImportResponse, lineIndex+1)) {
                 continue;
@@ -1768,10 +1790,11 @@ public class AtlasEntityStoreV2 implements AtlasEntityStore {
             }
 
             if(ret.containsKey(vertexKey)) {
-                atlasEntity = ret.get(vertexKey);
+                final AtlasEntity atlasEntity = ret.get(vertexKey);
                 atlasEntity.setBusinessAttribute(bMName, bMAttributeName, attribute.get(bmAttribute));
                 ret.put(vertexKey, atlasEntity);
             } else {
+                final AtlasEntity atlasEntity = new AtlasEntity(typeName);
                 String guid = GraphHelper.getGuid(atlasVertex);
                 atlasEntity.setGuid(guid);
                 atlasEntity.setTypeName(typeName);
